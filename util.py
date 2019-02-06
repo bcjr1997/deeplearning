@@ -16,12 +16,20 @@ def split_data(data, proportion):
     np.random.shuffle(data)
     return data[:split_idx], data[split_idx:]
 
+def one_hot_encoding(labels, num_classes):
+	return np.eye(num_classes)[labels.astype(int)]
 
 def load_data(path): 
 	
 	#loading images
 	images = np.load('fmnist_train_data.npy')
 	labels = np.load('fmnist_train_labels.npy')
+	images = images / 255.0
+	print(labels.shape)
+	labels = one_hot_encoding(labels,10)
+	labels = labels.astype(float)
+	print(images.shape)
+	print(labels.shape)
 	train_images, test_images = split_data(images, 0.9)
 	train_labels, test_labels = split_data(labels, 0.9)
 
@@ -38,7 +46,7 @@ def confusion_matrix_op(pred, actual_data, num_classes):
 	return conf_mtx
 
 def cross_entropy_op(y_placeholder, output):
-	return tf.nn.softmax_cross_entropy_with_logits(labels=y_placeholder, logits=output)
+	return tf.nn.softmax_cross_entropy_with_logits_v2(labels=y_placeholder, logits=output)
 
 def train_op(cross_entropy_op, global_step_tensor, optimizer):
 	return optimizer.minimize(cross_entropy_op, global_step=global_step_tensor)
@@ -53,7 +61,7 @@ def global_step_tensor(name):
 	return global_step_tensor
 
 def training(batch_size, x, y, model, train_images, train_labels, session, train_op, cross_entropy_op):
-	
+	print(train_labels.shape)
 	for i in range(int(train_images.shape[0]) // batch_size):
 		batch_xs = train_images[i * batch_size:(i + 1) * batch_size, :]
 		batch_ys = train_labels[i * batch_size:(i + 1) * batch_size, :]
@@ -64,6 +72,7 @@ def validation(batch_size, x, y, model, valid_images, valid_labels, session, cro
 	ce_vals = []
 	conf_mxs = []
 	accuracy = []
+	total_acc = 0
 	for i in range (valid_images.shape[0] // batch_size):
 		batch_xs = valid_images[i * batch_size:(i + 1) * batch_size, :]
 		batch_ys = valid_labels[i * batch_size:(i + 1) * batch_size, :]
@@ -77,7 +86,7 @@ def validation(batch_size, x, y, model, valid_images, valid_labels, session, cro
 		conf_mxs.append(conf_matrix)
 		for j in range(num_classes):
 			total_acc += conf_matrix[j][j]
-		accuracy.append(total_acc)
+		accuracy.append(total_acc/num_classes)
 	avg_valid_ce = sum(ce_vals) / len(ce_vals)
 	avg_accuracy = sum(accuracy)/ len(accuracy)
 	print("VALID CROSS ENTROPY: " + str(avg_valid_ce))
