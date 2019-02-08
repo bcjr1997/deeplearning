@@ -2,7 +2,6 @@ import os
 import tensorflow as tf
 import matplotlib.pyplot as plt
 import numpy as np
-
 def split_data(data, proportion):
     """
     Split a numpy array into two parts of `proportion` and `1 - proportion`
@@ -13,7 +12,6 @@ def split_data(data, proportion):
     """
     size = data.shape[0]
     split_idx = int(proportion * size)
-    np.random.shuffle(data)
     return data[:split_idx], data[split_idx:]
 
 def one_hot_encoding(labels, num_classes):
@@ -24,12 +22,16 @@ def load_data(path):
 	#loading images
 	images = np.load('fmnist_train_data.npy')
 	labels = np.load('fmnist_train_labels.npy')
+	permutation = np.random.permutation(images.shape[0])
+	images = images[permutation]
+	labels = labels[permutation]
 	images = images / 255.0
-	print(labels.shape)
+	#print(labels.shape)
 	labels = one_hot_encoding(labels,10)
+	#print(labels)
 	labels = labels.astype(float)
-	print(images.shape)
-	print(labels.shape)
+	#print(images.shape)
+	#print(labels.shape)
 	train_images, test_images = split_data(images, 0.9)
 	train_labels, test_labels = split_data(labels, 0.9)
 
@@ -38,15 +40,15 @@ def load_data(path):
 	return train_images, train_labels, test_images, test_labels, val_images, val_labels
 
 
-def confusion_matrix_op(pred, actual_data, num_classes):
+def confusion_matrix_op(y, output, num_classes):
 	conf_mtx = tf.confusion_matrix(
-    			tf.argmax(actual_data, axis=1), 
-    			tf.argmax(pred, axis=1), 
+    			tf.argmax(y, axis=1), 
+    			tf.argmax(output, axis=1), 
     			num_classes=num_classes)	
 	return conf_mtx
 
 def cross_entropy_op(y_placeholder, output):
-	return tf.nn.softmax_cross_entropy_with_logits_v2(labels=y_placeholder, logits=output)
+	return tf.nn.softmax_cross_entropy_with_logits(labels=y_placeholder, logits=output)
 
 def train_op(cross_entropy_op, global_step_tensor, optimizer):
 	return optimizer.minimize(cross_entropy_op, global_step=global_step_tensor)
@@ -71,8 +73,6 @@ def training(batch_size, x, y, model, train_images, train_labels, session, train
 def validation(batch_size, x, y, model, valid_images, valid_labels, session, cross_entropy_op, confusion_matrix_op, num_classes):
 	ce_vals = []
 	conf_mxs = []
-	accuracy = []
-	total_acc = 0
 	for i in range (valid_images.shape[0] // batch_size):
 		batch_xs = valid_images[i * batch_size:(i + 1) * batch_size, :]
 		batch_ys = valid_labels[i * batch_size:(i + 1) * batch_size, :]
@@ -84,13 +84,13 @@ def validation(batch_size, x, y, model, valid_images, valid_labels, session, cro
             })
 		ce_vals.append(valid_ce)
 		conf_mxs.append(conf_matrix)
-		for j in range(num_classes):
-			total_acc += conf_matrix[j][j]
-		accuracy.append(total_acc/num_classes)
+	avg_conf_mxs= sum(conf_mxs)
 	avg_valid_ce = sum(ce_vals) / len(ce_vals)
-	avg_accuracy = sum(accuracy)/ len(accuracy)
+	avg_accuracy = 0
+	for i in range (num_classes):
+		avg_accuracy += avg_conf_mxs[i][i]
 	print("VALID CROSS ENTROPY: " + str(avg_valid_ce))
-	print("VALID ACCURACY :" + str(avg_accuracy))
+	print("VALID ACCURACY :" + str(avg_accuracy/valid_images.shape[0]))
 	print("VALID CONFUSION MATRIX:")
 	#This prints the values across each class
 	print(str(sum(conf_mxs)))

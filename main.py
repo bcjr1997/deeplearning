@@ -12,7 +12,7 @@ import util
 def main(cli_args):
     parser = argparse.ArgumentParser(description="CSCE 496 HW 1, Classify Fashion MNIST data")
     parser.add_argument('--input_dir', type=str, default='/work/cse496dl/shared/homework/01', help = 'Numpy datafile input')
-    parser.add_argument('--model_dir',type=str,default='/Users/bcjr/Documents/deepLearning/homework_1',help='directory where model graph and weights are saved')
+    parser.add_argument('--model_dir',type=str,default='./homework_1/',help='directory where model graph and weights are saved')
     parser.add_argument('--epoch' , type=int, default=100, help = "Epoch : number of iterations for the model")
     parser.add_argument('--batch_size', type=int, default=32, help = "Batch Size")
     parser.add_argument('--model', type=int, help=" '1' for basic model, '2' for best model")
@@ -109,6 +109,6 @@ def main(cli_args):
                         cross_entropy, conf_matrix)
             else:
                 break
-    print(path_prefix)
+                
 if __name__ == "__main__":
     main(sys.argv[1:])

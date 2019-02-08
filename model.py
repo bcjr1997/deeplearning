@@ -20,15 +20,22 @@ def initiate_basic_model(x, y):
 def initiate_better_model(x, y):
     #3 Layer Architecture model
     with tf.name_scope('3_layer_model') as scope:
-        hidden_1 = tf.layers.dense(x, 400, 
+        hidden_1 = tf.layers.dense(x, 588, 
                     kernel_regularizer = tf.contrib.layers.l2_regularizer(scale=0.01),
                     bias_regularizer=tf.contrib.layers.l2_regularizer(scale=0.01),
                     activation=tf.nn.relu, name='hidden_layer_1')
-        hidden_2 = tf.layers.dense(hidden_1, 196, 
+        dropout_1 = tf.layers.dropout(hidden_1, training=True, name='dropout_layer_1')
+        hidden_2 = tf.layers.dense(dropout_1, 392, 
                     kernel_regularizer = tf.contrib.layers.l2_regularizer(scale=0.01),
                     bias_regularizer=tf.contrib.layers.l2_regularizer(scale=0.01),
                     activation=tf.nn.relu, name='hidden_layer_2')
-        output = tf.layers.dense(hidden_2, 10, name='output_layer',
+        dropout_2 = tf.layers.dropout(hidden_2, training=True, name='dropout_layer_2')
+        hidden_3 = tf.layers.dense(dropout_2, 196, 
+                    kernel_regularizer = tf.contrib.layers.l2_regularizer(scale=0.01),
+                    bias_regularizer=tf.contrib.layers.l2_regularizer(scale=0.01),
+                    activation=tf.nn.relu, name='hidden_layer_3')
+        dropout_3 = tf.layers.dropout(hidden_3, training=True, name='dropout_layer_3')
+        output = tf.layers.dense(dropout_3, 10, name='output_layer',
                     kernel_regularizer = tf.contrib.layers.l2_regularizer(scale=0.01),
                     bias_regularizer = tf.contrib.layers.l2_regularizer(scale=0.01)
                     )
