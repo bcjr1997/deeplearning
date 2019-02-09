@@ -16,7 +16,7 @@ def main(cli_args):
     parser.add_argument('--epoch' , type=int, default=100, help = "Epoch : number of iterations for the model")
     parser.add_argument('--batch_size', type=int, default=32, help = "Batch Size")
     parser.add_argument('--model', type=int, help=" '1' for basic model, '2' for best model")
-    parser.add_argument('--stopCount', type=int, default = 10, help="Number of times for dropping accuracy before early stopping")
+    parser.add_argument('--stopCount', type=int, default = 100, help="Number of times for dropping accuracy before early stopping")
     args_input = parser.parse_args(cli_args)
 
     if args_input.input_dir:
@@ -61,9 +61,9 @@ def main(cli_args):
 
     #Specify Model
     if(str(model) == '1'):
-        model, output = initiate_basic_model(x,y)
+        _, output = initiate_basic_model(x,y)
     elif(str(model) == '2'):
-        model, output = initiate_better_model(x,y)
+        _, output = initiate_better_model(x,y)
 
     #Run Training with early stopping and save output
     counter = stop_counter
@@ -77,38 +77,41 @@ def main(cli_args):
     saver = tf.train.Saver()
     with tf.Session() as session:
         session.run(tf.global_variables_initializer())
-        for epoch in range (epochs):
-            if counter > 0:
-                print("Epoch : " + str(epoch))
-                util.training(batch_size, x , y, model, train_images,
-                            train_labels, session,
-                            train_op,cross_entropy)
-                accuracy = util.validation(batch_size, x , y, model, val_images,
-                                        val_labels, session,
-                                        cross_entropy,
-                                        conf_matrix,10)
-                if epoch == 0:
-                    print("Saving..... in epoch : " + str(epoch))
-                    prev_winner = accuracy
-                    path_prefix = saver.save(session,
-                                            model_dir,
-                                            global_step=global_step_tensor)
-                else:
-                    curr_winner = accuracy
-                    if (curr_winner > prev_winner) and (counter > 0):
+        for i in range(10):
+            print("KFold : " + str(i))
+            counter = stop_counter
+            for epoch in range (epochs):
+                if counter > 0:
+                    print("Epoch : " + str(epoch))
+                    util.training(batch_size, x , y, train_images[i],
+                                train_labels[i], session,
+                                train_op,cross_entropy)
+                    accuracy = util.validation(batch_size, x , y, val_images[i],
+                                            val_labels[i], session,
+                                            cross_entropy,
+                                            conf_matrix,10)
+                    if epoch == 0:
                         print("Saving..... in epoch : " + str(epoch))
-                        prev_winner = curr_winner
+                        prev_winner = accuracy
                         path_prefix = saver.save(session,
-                                                model_dir,
+                                                "./homework_1/homework_1",
                                                 global_step=global_step_tensor)
                     else:
-                        counter -= 1
+                        curr_winner = accuracy
+                        if (curr_winner > prev_winner) and (counter > 0):
+                            print("Saving..... in epoch : " + str(epoch))
+                            prev_winner = curr_winner
+                            path_prefix = saver.save(session,
+                                                    "./homework_1/homework_1",
+                                                    global_step=global_step_tensor)
+                        else:
+                            counter -= 1
 
-                util.test(batch_size, x , y, model, test_images,
-                        test_labels, session,
-                        cross_entropy, conf_matrix)
-            else:
-                break
+                    util.test(batch_size, x , y, test_images[i],
+                            test_labels[i], session,
+                            cross_entropy, conf_matrix)
+                else:
+                    break
                 
 if __name__ == "__main__":
     main(sys.argv[1:])

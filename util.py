@@ -17,6 +17,63 @@ def split_data(data, proportion):
 def one_hot_encoding(labels, num_classes):
 	return np.eye(num_classes)[labels.astype(int)]
 
+def load_data_kfold(images,labels,kfold):
+	#KFold
+	image_partition = []
+	label_partition = []
+	image_size = int(images.shape[0] / kfold)
+	label_size = int(labels.shape[0] / kfold)
+
+	#Split into K Partitions
+	for i in range(kfold):
+		a = i * image_size
+		b = (i + 1) * image_size
+		temp_images = images[ a : b ]
+		image_partition.append(temp_images)
+		a = i * label_size
+		b = (i + 1) * label_size
+		temp_labels = labels[a : b]
+		label_partition.append(temp_labels)
+
+	image_partition = np.array(image_partition)
+	label_partition = np.array(label_partition)
+
+	#Shuffle into 10 ways
+	train_images = []
+	train_labels = []
+	test_images = []
+	test_labels = []
+	val_images = [] 
+	val_labels = []
+	for i in range(kfold):
+		#Get a set for test
+		test_images.append(image_partition[i])
+		test_labels.append(label_partition[i])
+		#Get Validation dataset
+
+		val = i + 1
+		if val != 10:
+			val_images.append(image_partition[val])
+			val_labels.append(label_partition[val])
+		else:
+			val = 0
+			val_images.append(image_partition[val])
+			val_labels.append(label_partition[val])
+
+		#Then the remainder will be populated into train
+		remain_images = np.array([]).reshape(0,784)
+		remain_labels = np.array([]).reshape(0,10)
+		for j in range(kfold):
+			if i != j and val!= j:
+				remain_images = np.concatenate((remain_images, image_partition[j]))
+				remain_labels = np.concatenate((remain_labels, label_partition[j]))
+
+		train_images.append(remain_images)
+		train_labels.append(remain_labels)
+
+	return train_images, train_labels, test_images, test_labels, val_images, val_labels
+
+
 def load_data(path): 
 	
 	#loading images
@@ -30,13 +87,8 @@ def load_data(path):
 	labels = one_hot_encoding(labels,10)
 	#print(labels)
 	labels = labels.astype(float)
-	#print(images.shape)
-	#print(labels.shape)
-	train_images, test_images = split_data(images, 0.9)
-	train_labels, test_labels = split_data(labels, 0.9)
-
-	train_images, val_images = split_data(train_images, 0.9)
-	train_labels, val_labels = split_data(train_labels, 0.9)
+	train_images, train_labels, test_images, test_labels, val_images, val_labels = load_data_kfold(images,labels,10)
+	#Get Validation Dataset
 	return train_images, train_labels, test_images, test_labels, val_images, val_labels
 
 
@@ -62,7 +114,7 @@ def global_step_tensor(name):
 	initializer=tf.zeros_initializer)
 	return global_step_tensor
 
-def training(batch_size, x, y, model, train_images, train_labels, session, train_op, cross_entropy_op):
+def training(batch_size, x, y, train_images, train_labels, session, train_op, cross_entropy_op):
 	print(train_labels.shape)
 	for i in range(int(train_images.shape[0]) // batch_size):
 		batch_xs = train_images[i * batch_size:(i + 1) * batch_size, :]
@@ -70,7 +122,7 @@ def training(batch_size, x, y, model, train_images, train_labels, session, train
 		
 		_ = session.run(train_op, feed_dict = {x: batch_xs, y: batch_ys})
 
-def validation(batch_size, x, y, model, valid_images, valid_labels, session, cross_entropy_op, confusion_matrix_op, num_classes):
+def validation(batch_size, x, y, valid_images, valid_labels, session, cross_entropy_op, confusion_matrix_op, num_classes):
 	ce_vals = []
 	conf_mxs = []
 	for i in range (valid_images.shape[0] // batch_size):
@@ -96,7 +148,7 @@ def validation(batch_size, x, y, model, valid_images, valid_labels, session, cro
 	print(str(sum(conf_mxs)))
 	return avg_accuracy
 
-def test(batch_size, x , y, model, test_images, test_labels, session,
+def test(batch_size, x , y, test_images, test_labels, session,
 cross_entropy_op, confusion_matrix_op):
 	# report mean test loss
     ce_vals = []
