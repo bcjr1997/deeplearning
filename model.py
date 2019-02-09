@@ -14,7 +14,8 @@ def initiate_basic_model(x, y):
                     kernel_regularizer = tf.contrib.layers.l2_regularizer(scale=0.01),
                     bias_regularizer = tf.contrib.layers.l2_regularizer(scale=0.01)
                     )
-        tf.identity(output, name='output')
+    
+    tf.identity(output, name='output')
     return scope, output
 
 def initiate_better_model(x, y):
@@ -30,15 +31,11 @@ def initiate_better_model(x, y):
                     bias_regularizer=tf.contrib.layers.l2_regularizer(scale=0.01),
                     activation=tf.nn.relu, name='hidden_layer_2')
         dropout_2 = tf.layers.dropout(hidden_2, training=True, name='dropout_layer_2')
-        hidden_3 = tf.layers.dense(dropout_2, 196, 
-                    kernel_regularizer = tf.contrib.layers.l2_regularizer(scale=0.01),
-                    bias_regularizer=tf.contrib.layers.l2_regularizer(scale=0.01),
-                    activation=tf.nn.relu, name='hidden_layer_3')
-        dropout_3 = tf.layers.dropout(hidden_3, training=True, name='dropout_layer_3')
-        output = tf.layers.dense(dropout_3, 10, name='output_layer',
+        output = tf.layers.dense(dropout_2, 10, name='output_layer',
                     kernel_regularizer = tf.contrib.layers.l2_regularizer(scale=0.01),
                     bias_regularizer = tf.contrib.layers.l2_regularizer(scale=0.01)
                     )
-        tf.identity(output, name='output')
+    
+    tf.identity(output, name='output')
     return scope, output
 
