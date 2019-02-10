@@ -2,7 +2,7 @@ import os
 import tensorflow as tf
 import matplotlib.pyplot as plt
 import numpy as np
-
+from math import sqrt
 def split_data(data, proportion):
     """
     Split a numpy array into two parts of `proportion` and `1 - proportion`
@@ -18,8 +18,8 @@ def split_data(data, proportion):
 def confidence_interval(accuracy, constant, n):
 	error = 1 - accuracy
 	calculation = (error * (1 - error)) / n
-	value1 = error + (constant * calculation)
-	value2 = error - (constant * calculation)
+	value1 = error + (constant * sqrt(calculation))
+	value2 = error - (constant * sqrt(calculation))
 	return value1, value2
 
 def one_hot_encoding(labels, num_classes):
@@ -122,14 +122,14 @@ def global_step_tensor(name):
 	initializer=tf.zeros_initializer)
 	return global_step_tensor
 
-def training(batch_size, x, output, train_images, train_labels, session, train_op, confusion_matrix_op, num_classes):
+def training(batch_size, x, y, train_images, train_labels, session, train_op, confusion_matrix_op, num_classes):
 	conf_mxs =[]
 	avg_accuracy = 0
 	for i in range(int(train_images.shape[0]) // batch_size):
 		batch_xs = train_images[i * batch_size:(i + 1) * batch_size, :]
 		batch_ys = train_labels[i * batch_size:(i + 1) * batch_size, :]
 		
-		_,conf_matrix = session.run([train_op, confusion_matrix_op], feed_dict = {x: batch_xs, output: batch_ys})
+		_,conf_matrix = session.run([train_op, confusion_matrix_op], feed_dict = {x: batch_xs, y: batch_ys})
 		conf_mxs.append(conf_matrix)
 	avg_conf_mxs= sum(conf_mxs)
 	for i in range (num_classes):
@@ -139,7 +139,7 @@ def training(batch_size, x, output, train_images, train_labels, session, train_o
 	#This prints the values across each class
 	print(str(sum(conf_mxs)))
 
-def validation(batch_size, x, output, valid_images, valid_labels, session, cross_entropy_op, confusion_matrix_op, num_classes):
+def validation(batch_size, x, y, valid_images, valid_labels, session, cross_entropy_op, confusion_matrix_op, num_classes):
 	ce_vals = []
 	conf_mxs = []
 	for i in range (valid_images.shape[0] // batch_size):
@@ -149,7 +149,7 @@ def validation(batch_size, x, output, valid_images, valid_labels, session, cross
             [tf.reduce_mean(cross_entropy_op), confusion_matrix_op],
 			feed_dict = {
                 x: batch_xs,
-                output: batch_ys
+                y: batch_ys
             })
 		ce_vals.append(valid_ce)
 		conf_mxs.append(conf_matrix)
@@ -165,7 +165,7 @@ def validation(batch_size, x, output, valid_images, valid_labels, session, cross
 	print(str(sum(conf_mxs)))
 	return avg_accuracy/valid_images.shape[0]
 
-def test(batch_size, x , output, test_images, test_labels, session, cross_entropy_op, confusion_matrix_op, num_classes):
+def test(batch_size, x , y, test_images, test_labels, session, cross_entropy_op, confusion_matrix_op, num_classes):
 	# report mean test loss
     ce_vals = []
     conf_mxs = []
@@ -175,7 +175,7 @@ def test(batch_size, x , output, test_images, test_labels, session, cross_entrop
         test_ce, conf_matrix = session.run(
             [tf.reduce_mean(cross_entropy_op), confusion_matrix_op], {
                 x: batch_xs,
-                output: batch_ys
+                y: batch_ys
             })
         ce_vals.append(test_ce)
         conf_mxs.append(conf_matrix)

@@ -57,7 +57,7 @@ def main(cli_args):
     #Load Data
     train_images, train_labels, test_images, test_labels, val_images, val_labels = util.load_data(input_dir)
     x = tf.placeholder(tf.float32, [None, 784], name='input_placeholder')
-    output = tf.placeholder(tf.float32, [None, 10], name='output')
+    y = tf.placeholder(tf.float32, [None, 10], name='labels')
 
     #Specify Model
     if(str(model) == '1'):
@@ -70,10 +70,10 @@ def main(cli_args):
     prev_winner = 0
     curr_winner = 0
     optimizer = tf.train.AdamOptimizer(learning_rate=0.0001)
-    cross_entropy = util.cross_entropy_op(output , outputLayer)
+    cross_entropy = util.cross_entropy_op(y , outputLayer)
     global_step_tensor = util.global_step_tensor('global_step_tensor')
     train_op = util.train_op(cross_entropy, global_step_tensor, optimizer)
-    conf_matrix = util.confusion_matrix_op(output, outputLayer, 10)
+    conf_matrix = util.confusion_matrix_op(y, outputLayer, 10)
     saver = tf.train.Saver()
     with tf.Session() as session:
         session.run(tf.global_variables_initializer())
@@ -83,10 +83,10 @@ def main(cli_args):
             for epoch in range (epochs):
                 if counter > 0:
                     print("Epoch : " + str(epoch))
-                    util.training(batch_size, x , output, train_images[i],
+                    util.training(batch_size, x , y, train_images[i],
                                 train_labels[i], session,
                                 train_op,conf_matrix, 10)
-                    accuracy = util.validation(batch_size, x , output, val_images[i],
+                    accuracy = util.validation(batch_size, x , y, val_images[i],
                                             val_labels[i], session,
                                             cross_entropy,
                                             conf_matrix,10)
@@ -99,11 +99,11 @@ def main(cli_args):
                         else:
                             counter -= 1
 
-                    test_accuracy = util.test(batch_size, x , output, test_images[i],
+                    test_accuracy = util.test(batch_size, x , y, test_images[i],
                             test_labels[i], session,
                             cross_entropy, conf_matrix, 10)
                     #Calculate the confidence interval
-                    value1 , value2 = util.confidence_interval(test_accuracy, 0.95, test_images[i].shape[0])
+                    value1 , value2 = util.confidence_interval(test_accuracy, 1.96, test_images[i].shape[0])
                     print("Confidence Interval : " + str(value1) + " , " + str(value2))
                 else:
                     break
