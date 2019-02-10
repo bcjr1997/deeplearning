@@ -3,7 +3,7 @@ import tensorflow as tf
 import matplotlib.pyplot as plt
 import numpy as np
 
-def initiate_basic_model(x, y):
+def initiate_basic_model(x):
     #Linear Architecture Model
     with tf.name_scope('linear_model') as scope:
         hidden = tf.layers.dense(x, 400, 
@@ -18,7 +18,7 @@ def initiate_basic_model(x, y):
     tf.identity(output, name='output')
     return scope, output
 
-def initiate_better_model(x, y):
+def initiate_better_model(x):
     #3 Layer Architecture model
     with tf.name_scope('3_layer_model') as scope:
         hidden_1 = tf.layers.dense(x, 588, 
