@@ -106,8 +106,8 @@ def main(cli_args):
                         else:
                             counter -= 1
 
-                    test_accuracy = util.test(batch_size, x , y, test_images[i],
-                            test_labels[i], session,
+                    test_accuracy = util.test(batch_size, x , y, test_images,
+                            test_labels, session,
                             cross_entropy, conf_matrix, 100)
                     #Calculate the confidence interval
                     value1 , value2 = util.confidence_interval(test_accuracy, 1.96, test_images[i].shape[0])
