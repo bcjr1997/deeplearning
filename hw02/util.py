@@ -60,7 +60,7 @@ def load_data_kfold(images,labels,kfold):
 		#Get Validation dataset
 
 		val = i + 1
-		if val != 10:
+		if val != 100:
 			val_images.append(image_partition[val])
 			val_labels.append(label_partition[val])
 		else:
@@ -70,7 +70,7 @@ def load_data_kfold(images,labels,kfold):
 
 		#Then the remainder will be populated into train
 		remain_images = np.array([]).reshape(0,784)
-		remain_labels = np.array([]).reshape(0,10)
+		remain_labels = np.array([]).reshape(0,100)
 		for j in range(kfold):
 			if i != j and val!= j:
 				remain_images = np.concatenate((remain_images, image_partition[j]))
@@ -90,12 +90,21 @@ def load_data(path):
 	permutation = np.random.permutation(images.shape[0])
 	images = images[permutation]
 	labels = labels[permutation]
-	images = images / 255.0
+	
 	#print(labels.shape)
-	labels = one_hot_encoding(labels,10)
+	labels = one_hot_encoding(labels,100)
 	#print(labels)
 	labels = labels.astype(float)
-	train_images, train_labels, test_images, test_labels, val_images, val_labels = load_data_kfold(images,labels,10)
+
+	train_images, test_images = split_data(images, 0.9)
+	train_labels, test_labels = split_data(labels, 0.9)
+
+	train_images, val_images = split_data(train_images, 0.9)
+	train_labels, val_labels = split_data(train_labels, 0.9)
+
+	train_images = np.reshape(train_images, [-1, 32, 32, 3])
+	test_images = np.reshape(test_images, [-1, 32, 32, 3])
+	val_images = np.reshape(val_images, [-1, 32, 32, 3])
 	#Get Validation Dataset
 	return train_images, train_labels, test_images, test_labels, val_images, val_labels
 
@@ -108,7 +117,7 @@ def confusion_matrix_op(y, output, num_classes):
 	return conf_mtx
 
 def cross_entropy_op(y_placeholder, output):
-	return tf.nn.softmax_cross_entropy_with_logits(labels=y_placeholder, logits=output)
+	return tf.nn.softmax_cross_entropy_with_logits_v2(labels=y_placeholder, logits=output)
 
 def train_op(cross_entropy_op, global_step_tensor, optimizer):
 	return optimizer.minimize(cross_entropy_op, global_step=global_step_tensor)
@@ -126,8 +135,10 @@ def training(batch_size, x, y, train_images, train_labels, session, train_op, co
 	conf_mxs =[]
 	avg_accuracy = 0
 	for i in range(int(train_images.shape[0]) // batch_size):
+		
 		batch_xs = train_images[i * batch_size:(i + 1) * batch_size, :]
 		batch_ys = train_labels[i * batch_size:(i + 1) * batch_size, :]
+		
 		
 		_,conf_matrix = session.run([train_op, confusion_matrix_op], feed_dict = {x: batch_xs, y: batch_ys})
 		conf_mxs.append(conf_matrix)

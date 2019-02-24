@@ -12,7 +12,7 @@ import util
 def main(cli_args):
     parser = argparse.ArgumentParser(description="CSCE 496 HW 2, Classify Cifar data")
     parser.add_argument('--input_dir', type=str, default='/work/cse496dl/shared/homework/02', help = 'Numpy datafile input')
-    parser.add_argument('--model_dir',type=str,default='./homework_1/',help='directory where model graph and weights are saved')
+    parser.add_argument('--model_dir',type=str,default='./homework_2/',help='directory where model graph and weights are saved')
     parser.add_argument('--epoch' , type=int, default=100, help = "Epoch : number of iterations for the model")
     parser.add_argument('--batch_size', type=int, default=32, help = "Batch Size")
     parser.add_argument('--model', type=int, help=" '1' for basic model, '2' for best model")
@@ -56,8 +56,8 @@ def main(cli_args):
 
     #Load Data
     train_images, train_labels, test_images, test_labels, val_images, val_labels = util.load_data("")
-    x = tf.placeholder(tf.float32, [None, 784], name='input_placeholder')
-    y = tf.placeholder(tf.float32, [None, 10], name='labels')
+    x = tf.placeholder(tf.float32, [None,32,32,3], name='input_placeholder')
+    y = tf.placeholder(tf.float32, [None, 100], name='labels')
 
     #Specify Model
     if(str(model) == '1'):
@@ -73,9 +73,12 @@ def main(cli_args):
     cross_entropy = util.cross_entropy_op(y , outputLayer)
     global_step_tensor = util.global_step_tensor('global_step_tensor')
     train_op = util.train_op(cross_entropy, global_step_tensor, optimizer)
-    conf_matrix = util.confusion_matrix_op(y, outputLayer, 10)
+    conf_matrix = util.confusion_matrix_op(y, outputLayer, 100)
     saver = tf.train.Saver()
     with tf.Session() as session:
+        if os.path.isfile(os.path.join("./homework_2/", "homework_2")):
+            saver = tf.train.import_meta_graph("homework_2.meta")
+            saver.restore(session,"./homework_2/homework_2")
         session.run(tf.global_variables_initializer())
         for i in range(10):
             print("KFold : " + str(i))
@@ -83,32 +86,34 @@ def main(cli_args):
             for epoch in range (epochs):
                 if counter > 0:
                     print("Epoch : " + str(epoch))
-                    util.training(batch_size, x , y, train_images[i],
-                                train_labels[i], session,
-                                train_op,conf_matrix, 10)
-                    accuracy = util.validation(batch_size, x , y, val_images[i],
-                                            val_labels[i], session,
+                    util.training(batch_size, x , y, train_images,
+                                train_labels, session,
+                                train_op,conf_matrix, 100)
+                    accuracy = util.validation(batch_size, x , y, val_images,
+                                            val_labels, session,
                                             cross_entropy,
-                                            conf_matrix,10)
+                                            conf_matrix,100)
                     if epoch == 0:
                         prev_winner = accuracy
+                        print("Saving.......")
+                        saver.save(session, os.path.join("./homework_2/", "homework_2"))
                     else:
                         curr_winner = accuracy
                         if (curr_winner > prev_winner) and (counter > 0):
                             prev_winner = curr_winner
+                            print("Saving.......")
+                            saver.save(session, os.path.join("./homework_2/", "homework_2"))
                         else:
                             counter -= 1
 
                     test_accuracy = util.test(batch_size, x , y, test_images[i],
                             test_labels[i], session,
-                            cross_entropy, conf_matrix, 10)
+                            cross_entropy, conf_matrix, 100)
                     #Calculate the confidence interval
                     value1 , value2 = util.confidence_interval(test_accuracy, 1.96, test_images[i].shape[0])
                     print("Confidence Interval : " + str(value1) + " , " + str(value2))
                 else:
                     break
-            print("Saving.......")
-            saver.save(session, os.path.join("./homework_1/", "homework_1"))
                 
 if __name__ == "__main__":
     main(sys.argv[1:])
