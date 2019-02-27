@@ -85,8 +85,8 @@ def load_data_kfold(images,labels,kfold):
 def load_data(path): 
 	
 	#loading images
-	images = np.load('/work/cse496dl/shared/homework/02/cifar_images.npy')
-	labels = np.load('/work/cse496dl/shared/homework/02/cifar_labels.npy')
+	images = np.load('cifar_images.npy')
+	labels = np.load('cifar_labels.npy')
 	permutation = np.random.permutation(images.shape[0])
 	images = images[permutation]
 	labels = labels[permutation]
@@ -200,3 +200,16 @@ def test(batch_size, x , y, test_images, test_labels, session, cross_entropy_op,
     print('TEST CONFUSION MATRIX:')
     print(str(sum(conf_mxs)))
     return avg_accuracy/test_images.shape[0]
+
+def downscale_image(x, scale=2):
+	num, height, width, channels = x.get_shape().as_list()
+	return tf.layers.conv2d(x, np.floor(channels * 1.25), 3, strides=scale, padding="same")
+
+def upscale_image(x, scale = 2):
+	return tf.layers.conv2d_transpose(x, 1, 3, strides=(scale, scale), padding='same', activation=tf.nn.relu)
+
+def autoencoder_training(x, code, epochs, batch_size, train_data, session, train_op):
+	for epoch in range(1):
+		for i in range(train_data.shape[0] // batch_size):
+			batch_xs = train_data[i * batch_size : (i+1)*batch_size, :]
+			session.run(train_op, {x:batch_xs})

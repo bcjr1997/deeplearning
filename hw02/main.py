@@ -5,7 +5,7 @@ import sys
 import tensorflow as tf
 import matplotlib.pyplot as plt
 import numpy as np
-from model import initiate_basic_model, initiate_better_model
+from model import initiate_basic_model, initiate_autoencoder
 import util
 
 #Argsparse
@@ -49,39 +49,34 @@ def main(cli_args):
     else:
         raise ValueError("StopCount have to be an int") 
 
-    input_dir = '/work/cse496dl/shared/homework/01'
+    input_dir = '/work/cse496dl/shared/homework/02'
     #Make output model dir
     if os.path.exists(model_dir) == False:
         os.mkdir(model_dir)
 
     #Load Data
-    train_images, train_labels, test_images, test_labels, val_images, val_labels = util.load_data("")
     x = tf.placeholder(tf.float32, [None,32,32,3], name='input_placeholder')
     y = tf.placeholder(tf.float32, [None, 100], name='labels')
 
     #Specify Model
     if(str(model) == '1'):
+        train_images, train_labels, test_images, test_labels, val_images, val_labels = util.load_data("")
         _, outputLayer = initiate_basic_model(x)
-    elif(str(model) == '2'):
-        _, outputLayer = initiate_better_model(x)
-
-    #Run Training with early stopping and save output
-    counter = stop_counter
-    prev_winner = 0
-    curr_winner = 0
-    optimizer = tf.train.AdamOptimizer(learning_rate=0.0001)
-    cross_entropy = util.cross_entropy_op(y , outputLayer)
-    global_step_tensor = util.global_step_tensor('global_step_tensor')
-    train_op = util.train_op(cross_entropy, global_step_tensor, optimizer)
-    conf_matrix = util.confusion_matrix_op(y, outputLayer, 100)
-    saver = tf.train.Saver()
-    with tf.Session() as session:
-        if os.path.isfile(os.path.join("./homework_2/", "homework_2")):
-            saver = tf.train.import_meta_graph("homework_2.meta")
-            saver.restore(session,"./homework_2/homework_2")
-        session.run(tf.global_variables_initializer())
-        for i in range(10):
-            print("KFold : " + str(i))
+        #Run Training with early stopping and save output
+        counter = stop_counter
+        prev_winner = 0
+        curr_winner = 0
+        optimizer = tf.train.AdamOptimizer(learning_rate=0.0001)
+        cross_entropy = util.cross_entropy_op(y , outputLayer)
+        global_step_tensor = util.global_step_tensor('global_step_tensor')
+        train_op = util.train_op(cross_entropy, global_step_tensor, optimizer)
+        conf_matrix = util.confusion_matrix_op(y, outputLayer, 100)
+        saver = tf.train.Saver()
+        with tf.Session() as session:
+            if os.path.isfile(os.path.join("./homework_2/", "homework_2")):
+                saver = tf.train.import_meta_graph("homework_2.meta")
+                saver.restore(session,"./homework_2/homework_2")
+            session.run(tf.global_variables_initializer())
             counter = stop_counter
             for epoch in range (epochs):
                 if counter > 0:
@@ -110,10 +105,76 @@ def main(cli_args):
                             test_labels, session,
                             cross_entropy, conf_matrix, 100)
                     #Calculate the confidence interval
-                    value1 , value2 = util.confidence_interval(test_accuracy, 1.96, test_images[i].shape[0])
+                    value1 , value2 = util.confidence_interval(test_accuracy, 1.96, test_images.shape[0])
                     print("Confidence Interval : " + str(value1) + " , " + str(value2))
                 else:
                     break
+    elif(str(model) == '2'):
+        sparsity_weight = 5e-3
+        #Load the data and reshape it
+        train_data = np.load(os.path.join('imagenet_images.npy'))
+        train_images, train_labels, test_images, test_labels, val_images, val_labels = util.load_data("")
+        #train_data = np.reshape(train_data, [-1,32,32,1])
+        code, outputs = initiate_autoencoder(x, 100)
+        #Optimizer for Autoencoder
+        sparsity_loss = tf.norm(code, ord=1, axis=1)
+        reconstruction_loss = tf.reduce_mean(tf.square(outputs - x)) # Mean Square Error
+        total_loss = reconstruction_loss + sparsity_weight * sparsity_loss
+        optimizer = tf.train.AdamOptimizer(learning_rate=0.0001)
+        train_op = optimizer.minimize(total_loss)
+        with tf.Session() as sess:
+            sess.run(tf.global_variables_initializer())
+            util.autoencoder_training(x ,code, epochs, batch_size, train_data, sess, train_op)
+        _, outputLayer = initiate_basic_model(code)
+        #Run Training with early stopping and save output
+        counter = stop_counter
+        prev_winner = 0
+        curr_winner = 0
+        optimizer = tf.train.AdamOptimizer(learning_rate=0.0001)
+        cross_entropy = util.cross_entropy_op(y , outputLayer)
+        global_step_tensor = util.global_step_tensor('global_step_tensor')
+        train_op = util.train_op(cross_entropy, global_step_tensor, optimizer)
+        conf_matrix = util.confusion_matrix_op(y, outputLayer, 100)
+        saver = tf.train.Saver()
+        code = tf.reshape(code, [-1,4,4,3])
+        with tf.Session() as session:
+            if os.path.isfile(os.path.join("./homework_2/", "homework_2")):
+                saver = tf.train.import_meta_graph("homework_2.meta")
+                saver.restore(session,"./homework_2/homework_2")
+            session.run(tf.global_variables_initializer())
+            counter = stop_counter
+            for epoch in range (epochs):
+                if counter > 0:
+                    print("Epoch : " + str(epoch))
+                    util.training(batch_size, code , y, train_images,
+                                train_labels, session,
+                                train_op,conf_matrix, 100)
+                    accuracy = util.validation(batch_size, code, y, val_images,
+                                            val_labels, session,
+                                            cross_entropy,
+                                            conf_matrix,100)
+                    if epoch == 0:
+                        prev_winner = accuracy
+                        print("Saving.......")
+                        saver.save(session, os.path.join("./homework_2/", "homework_2"))
+                    else:
+                        curr_winner = accuracy
+                        if (curr_winner > prev_winner) and (counter > 0):
+                            prev_winner = curr_winner
+                            print("Saving.......")
+                            saver.save(session, os.path.join("./homework_2/", "homework_2"))
+                        else:
+                            counter -= 1
+
+                    test_accuracy = util.test(batch_size, code , y, test_images,
+                            test_labels, session,
+                            cross_entropy, conf_matrix, 100)
+                    #Calculate the confidence interval
+                    value1 , value2 = util.confidence_interval(test_accuracy, 1.96, test_images.shape[0])
+                    print("Confidence Interval : " + str(value1) + " , " + str(value2))
+                else:
+                    break
+    
                 
 if __name__ == "__main__":
     main(sys.argv[1:])
