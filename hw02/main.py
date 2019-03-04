@@ -5,9 +5,9 @@ import sys
 import tensorflow as tf
 import matplotlib.pyplot as plt
 import numpy as np
-from model import initiate_basic_model, initiate_autoencoder
+from model import initiate_basic_model, initiate_autoencoder, initiate_dense_model
 import util
-
+np.set_printoptions(threshold=np.nan)
 #Argsparse
 def main(cli_args):
     parser = argparse.ArgumentParser(description="CSCE 496 HW 2, Classify Cifar data")
@@ -69,13 +69,10 @@ def main(cli_args):
         optimizer = tf.train.AdamOptimizer(learning_rate=0.0001)
         cross_entropy = util.cross_entropy_op(y , outputLayer)
         global_step_tensor = util.global_step_tensor('global_step_tensor')
-        train_op = util.train_op(cross_entropy, global_step_tensor, optimizer)
+        train_op = util.train_op_basic(cross_entropy, global_step_tensor, optimizer)
         conf_matrix = util.confusion_matrix_op(y, outputLayer, 100)
         saver = tf.train.Saver()
         with tf.Session() as session:
-            if os.path.isfile(os.path.join("./homework_2/", "homework_2")):
-                saver = tf.train.import_meta_graph("homework_2.meta")
-                saver.restore(session,"./homework_2/homework_2")
             session.run(tf.global_variables_initializer())
             counter = stop_counter
             for epoch in range (epochs):
@@ -109,23 +106,32 @@ def main(cli_args):
                     print("Confidence Interval : " + str(value1) + " , " + str(value2))
                 else:
                     break
+
     elif(str(model) == '2'):
         sparsity_weight = 5e-3
         #Load the data and reshape it
-        train_data = np.load(os.path.join('imagenet_images.npy'))
+        train_data = np.load(os.path.join(os.path.join(input_dir , 'imagenet_images.npy')))
         train_images, train_labels, test_images, test_labels, val_images, val_labels = util.load_data("")
         #train_data = np.reshape(train_data, [-1,32,32,1])
-        code, outputs = initiate_autoencoder(x, 100)
+        #Add noise to the data
+        noise_level = 0.2
+        x_noise= x + noise_level * tf.random_normal(tf.shape(x))
+        code, outputs = initiate_autoencoder(x_noise, 100)
         #Optimizer for Autoencoder
         sparsity_loss = tf.norm(code, ord=1, axis=1)
         reconstruction_loss = tf.reduce_mean(tf.square(outputs - x)) # Mean Square Error
         total_loss = reconstruction_loss + sparsity_weight * sparsity_loss
         optimizer = tf.train.AdamOptimizer(learning_rate=0.0001)
         train_op = optimizer.minimize(total_loss)
+        saver = tf.train.Saver()
         with tf.Session() as sess:
             sess.run(tf.global_variables_initializer())
             util.autoencoder_training(x ,code, epochs, batch_size, train_data, sess, train_op)
-        _, outputLayer = initiate_basic_model(code)
+            saver.save(sess, os.path.join("./homework_2/", "homework_2"))
+        print("Done : " + str(code))
+        
+        _, outputLayer = initiate_dense_model(code)
+
         #Run Training with early stopping and save output
         counter = stop_counter
         prev_winner = 0
@@ -133,23 +139,25 @@ def main(cli_args):
         optimizer = tf.train.AdamOptimizer(learning_rate=0.0001)
         cross_entropy = util.cross_entropy_op(y , outputLayer)
         global_step_tensor = util.global_step_tensor('global_step_tensor')
-        train_op = util.train_op(cross_entropy, global_step_tensor, optimizer)
+        #train_op = util.train_op_encoder(cross_entropy, global_step_tensor, optimizer, var_list=tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, "code_layer"))
+        train_op = util.train_op_basic(cross_entropy, global_step_tensor, optimizer)
         conf_matrix = util.confusion_matrix_op(y, outputLayer, 100)
-        saver = tf.train.Saver()
-        code = tf.reshape(code, [-1,4,4,3])
         with tf.Session() as session:
+            session.run(tf.global_variables_initializer())
             if os.path.isfile(os.path.join("./homework_2/", "homework_2")):
                 saver = tf.train.import_meta_graph("homework_2.meta")
                 saver.restore(session,"./homework_2/homework_2")
-            session.run(tf.global_variables_initializer())
+            code_encode = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, "code_layer")
+            session.run(tf.variables_initializer(code_encode, name="init_encoded_layer"))
+            tf.stop_gradient(tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, "init_encoded_layer"))
             counter = stop_counter
             for epoch in range (epochs):
                 if counter > 0:
                     print("Epoch : " + str(epoch))
-                    util.training(batch_size, code , y, train_images,
+                    util.training(batch_size, x , y, train_images,
                                 train_labels, session,
                                 train_op,conf_matrix, 100)
-                    accuracy = util.validation(batch_size, code, y, val_images,
+                    accuracy = util.validation(batch_size, x, y, val_images,
                                             val_labels, session,
                                             cross_entropy,
                                             conf_matrix,100)
@@ -164,9 +172,10 @@ def main(cli_args):
                             print("Saving.......")
                             saver.save(session, os.path.join("./homework_2/", "homework_2"))
                         else:
+                            print("Validation Loss : " + str(curr_winner - prev_winner))
                             counter -= 1
 
-                    test_accuracy = util.test(batch_size, code , y, test_images,
+                    test_accuracy = util.test(batch_size, x , y, test_images,
                             test_labels, session,
                             cross_entropy, conf_matrix, 100)
                     #Calculate the confidence interval

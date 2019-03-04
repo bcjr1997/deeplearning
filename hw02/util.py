@@ -3,6 +3,7 @@ import tensorflow as tf
 import matplotlib.pyplot as plt
 import numpy as np
 from math import sqrt
+np.set_printoptions(threshold=np.nan)
 def split_data(data, proportion):
     """
     Split a numpy array into two parts of `proportion` and `1 - proportion`
@@ -85,11 +86,12 @@ def load_data_kfold(images,labels,kfold):
 def load_data(path): 
 	
 	#loading images
-	images = np.load('cifar_images.npy')
-	labels = np.load('cifar_labels.npy')
+	images = np.load(os.path.join(path,'cifar_images.npy'))
+	labels = np.load(os.path.join(path,'cifar_labels.npy'))
 	permutation = np.random.permutation(images.shape[0])
 	images = images[permutation]
 	labels = labels[permutation]
+	images = images / 255.0
 	
 	#print(labels.shape)
 	labels = one_hot_encoding(labels,100)
@@ -119,8 +121,11 @@ def confusion_matrix_op(y, output, num_classes):
 def cross_entropy_op(y_placeholder, output):
 	return tf.nn.softmax_cross_entropy_with_logits_v2(labels=y_placeholder, logits=output)
 
-def train_op(cross_entropy_op, global_step_tensor, optimizer):
+def train_op_basic(cross_entropy_op, global_step_tensor, optimizer):
 	return optimizer.minimize(cross_entropy_op, global_step=global_step_tensor)
+
+def train_op_encoder(cross_entropy_op, global_step_tensor, optimizer, var_list):
+	return optimizer.minimize(cross_entropy_op, global_step=global_step_tensor, var_list=var_list)
 
 #Declaring global step tensor
 def global_step_tensor(name):
@@ -203,13 +208,19 @@ def test(batch_size, x , y, test_images, test_labels, session, cross_entropy_op,
 
 def downscale_image(x, scale=2):
 	num, height, width, channels = x.get_shape().as_list()
-	return tf.layers.conv2d(x, np.floor(channels * 1.25), 3, strides=scale, padding="same")
+	return tf.layers.conv2d(x, np.floor(channels * 1.25), 3, strides=scale, padding="same", 
+							bias_regularizer=tf.contrib.layers.l2_regularizer(scale=0.01),
+							kernel_regularizer=tf.contrib.layers.l2_regularizer(scale=0.01))
 
 def upscale_image(x, scale = 2):
-	return tf.layers.conv2d_transpose(x, 1, 3, strides=(scale, scale), padding='same', activation=tf.nn.relu)
+	return tf.layers.conv2d_transpose(x, 3, 3, strides=(scale, scale), padding='same', activation=tf.nn.relu, 
+	                                  bias_regularizer=tf.contrib.layers.l2_regularizer(scale=0.01),
+									  kernel_regularizer=tf.contrib.layers.l2_regularizer(scale=0.01))
 
 def autoencoder_training(x, code, epochs, batch_size, train_data, session, train_op):
-	for epoch in range(1):
+	for epoch in range(5):
+		print("Epoch: " + str(epoch))
 		for i in range(train_data.shape[0] // batch_size):
 			batch_xs = train_data[i * batch_size : (i+1)*batch_size, :]
 			session.run(train_op, {x:batch_xs})
+
