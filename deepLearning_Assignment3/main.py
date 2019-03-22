@@ -9,6 +9,7 @@ from model import initiate_basic_model, initiate_better_model
 import atari_wrappers
 import gym  #for the RL Environment
 import util
+import random
 
 #Argsparse
 def main(cli_args):
@@ -41,17 +42,32 @@ def main(cli_args):
         os.mkdir(model_dir)
 
     #Placeholder for Tensorflow Variables
-    x = tf.placeholder(tf.float32, [None, 84, 84, 4], name='input_placeholder')
-    y = tf.placeholder(tf.float32, [None, 18], name='output')
+    x = tf.placeholder(tf.float32, [None, 84, 84, 4], name='input_placeholder') #4 frames
+    y = tf.placeholder(tf.float32, [None, 18], name='output') #18 possible outputs
 
+    #Setup
+    learning_rate = 0.0001
+    number_of_episodes = 20
+    policy_model = initiate_basic_model(x)
+    target_model = initiate_basic_model(x)
+    replay_memory = util.ReplayMemory(1000000)
+    #Optimizer declared in util.py
     #Load "SeaQuest" from atari_wrapper.py
     seaquest_env = util.load_seaquest_env()
-    observation = seaquest_env.reset()
-    print(f"Environment Reset : {observation}")
-    observation = seaquest_env.step(1)
-    print(f"Environment Step : {observation}")
     NUM_ACTIONS = seaquest_env.action_space.n
     OBS_SHAPE = seaquest_env.observation_space.shape
+    EPS_END = 0.1
+    EPS_DECAY = 100000
+    step = 0
+    for episode in range(number_of_episodes):
+        prev_observation = seaquest_env.reset()
+        observation, reward, status, info = seaquest_env.step(random.randrange(NUM_ACTIONS))
+        done = False
+        episode_score = 0
+
+        while not done:
+            prep_obs = np.expand_dims(np.array(observation, dtype=np.float32), axis=0)
+            curr_action = util.epsilon_greedy_exploration(policy_model, prep_obs, step, NUM_ACTIONS, EPS_END, EPS_DECAY)
 
 if __name__ == "__main__":
     main(sys.argv[1:])
