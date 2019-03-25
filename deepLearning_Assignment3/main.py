@@ -19,8 +19,14 @@ def main(cli_args):
     parser.add_argument('--batch_size', type=int, default=32, help="Batch Size")
     parser.add_argument('--model_dir',type=str,default='./homework_3/',help='directory where model graph and weights are saved')
     parser.add_argument('--epoch' , type=int, default=100, help = "Epoch : number of iterations for the model")
+    parser.add_argument('--model', type=int, help=" '1' for basic model, '2' for best model")
     parser.add_argument('--stopCount', type=int, default = 100, help="Number of times for dropping accuracy before early stopping")
     args_input = parser.parse_args(cli_args)
+
+    if args_input.model:
+        model = args_input.model
+    else:
+        raise ValueError("Model selection must not be empty") 
 
     if args_input.batch_size:
         batch_size = args_input.batch_size
@@ -52,8 +58,14 @@ def main(cli_args):
     LEARNING_RATE = 0.0001
     TARGET_UPDATE_STEP_FREQ = 10
     number_of_episodes = 20
-    policy_model = initiate_basic_model(x)
-    target_model = initiate_basic_model(x)
+
+    if(str(model) == '1'):
+        policy_model = initiate_basic_model(x)
+        target_model = initiate_basic_model(x)
+    elif(str(model) == '2'):
+        policy_model = initiate_better_model(x)
+        target_model = initiate_better_model(x)
+
     replay_memory = util.ReplayMemory(1000000)
     #Optimizer
     optimizer = tf.train.RMSPropOptimizer(LEARNING_RATE)
@@ -64,29 +76,32 @@ def main(cli_args):
     EPS_END = 0.1
     EPS_DECAY = 100000
     step = 0
-    for episode in range(number_of_episodes):
-        prev_observation = seaquest_env.reset()
-        observation, reward, status, info = seaquest_env.step(random.randrange(NUM_ACTIONS))
-        done = False
-        episode_score = 0
+    with tf.Session as sess:
+        sess.run(tf.global_variables_initializer())
+        for episode in range(number_of_episodes):
+            print(f"Episode {episode}")
+            prev_observation = seaquest_env.reset()
+            observation, reward, status, info = seaquest_env.step(random.randrange(NUM_ACTIONS))
+            done = False
+            episode_score = 0
 
-        while not done:
-            prep_obs = np.expand_dims(np.array(observation, dtype=np.float32), axis=0)
-            curr_action = util.epsilon_greedy_exploration(policy_model, prep_obs, step, NUM_ACTIONS, EPS_END, EPS_DECAY)
-            observation, reward, done, _ = seaquest_env.step(curr_action)
+            while not done:
+                prep_obs = np.expand_dims(np.array(observation, dtype=np.float32), axis=0)
+                curr_action = util.epsilon_greedy_exploration(policy_model, prep_obs, step, NUM_ACTIONS, EPS_END, EPS_DECAY)
+                observation, reward, done, _ = seaquest_env.step(curr_action)
 
-            replay_memory.push(prev_observation, curr_action, observation, reward)
-            prev_observation = observation
+                replay_memory.push(prev_observation, curr_action, observation, reward)
+                prev_observation = observation
 
-            loss, gradients = util.dqn_gradient_calculation(replay_memory, policy_model, target_model, batch_size, optimizer)
-            if gradients is not None:
-                optimizer.apply_gradients(zip(gradients, tf.trainable_variables()))
+                loss, gradients = util.dqn_gradient_calculation(replay_memory, policy_model, target_model, batch_size, optimizer)
+                if gradients is not None:
+                    optimizer.apply_gradients(zip(gradients, tf.trainable_variables()))
 
-            episode_score += reward
-            step += 1
+                episode_score += reward
+                step += 1
 
-        if episode % TARGET_UPDATE_STEP_FREQ == 0:
-            target_model
+            if episode % TARGET_UPDATE_STEP_FREQ == 0:
+                target_model
 
 if __name__ == "__main__":
     main(sys.argv[1:])
