@@ -22,6 +22,9 @@ def main(cli_args):
     parser.add_argument('--stopCount', type=int, default = 100, help="Number of times for dropping accuracy before early stopping")
     args_input = parser.parse_args(cli_args)
 
+    if args_input.batch_size:
+        batch_size = args_input.batch_size
+
     if args_input.model_dir:
         model_dir = args_input.model_dir
     else:
@@ -46,12 +49,14 @@ def main(cli_args):
     y = tf.placeholder(tf.float32, [None, 18], name='output') #18 possible outputs
 
     #Setup
-    learning_rate = 0.0001
+    LEARNING_RATE = 0.0001
+    TARGET_UPDATE_STEP_FREQ = 10
     number_of_episodes = 20
     policy_model = initiate_basic_model(x)
     target_model = initiate_basic_model(x)
     replay_memory = util.ReplayMemory(1000000)
-    #Optimizer declared in util.py
+    #Optimizer
+    optimizer = tf.train.RMSPropOptimizer(LEARNING_RATE)
     #Load "SeaQuest" from atari_wrapper.py
     seaquest_env = util.load_seaquest_env()
     NUM_ACTIONS = seaquest_env.action_space.n
@@ -68,6 +73,20 @@ def main(cli_args):
         while not done:
             prep_obs = np.expand_dims(np.array(observation, dtype=np.float32), axis=0)
             curr_action = util.epsilon_greedy_exploration(policy_model, prep_obs, step, NUM_ACTIONS, EPS_END, EPS_DECAY)
+            observation, reward, done, _ = seaquest_env.step(curr_action)
+
+            replay_memory.push(prev_observation, curr_action, observation, reward)
+            prev_observation = observation
+
+            loss, gradients = util.dqn_gradient_calculation(replay_memory, policy_model, target_model, batch_size, optimizer)
+            if gradients is not None:
+                optimizer.apply_gradients(zip(gradients, tf.trainable_variables()))
+
+            episode_score += reward
+            step += 1
+
+        if episode % TARGET_UPDATE_STEP_FREQ == 0:
+            target_model
 
 if __name__ == "__main__":
     main(sys.argv[1:])

@@ -40,7 +40,7 @@ def huber_loss(x_placeholder, delta=1.0):
     )
 
 # Calculate the gradients for DQN
-def dqn_gradient_calculation(replay_memory, policy_model, target_model, batch_size, learning_rate, gamma=0.99, grad_norm_clipping=1.0):
+def dqn_gradient_calculation(replay_memory, policy_model, target_model, batch_size, optimizer, gamma=0.99, grad_norm_clipping=1.0):
 	#Check to see if there are enough transistions to form a batch
 	if len(replay_memory) > batch_size:
 		#If meet batch size, start training batch
@@ -65,7 +65,7 @@ def dqn_gradient_calculation(replay_memory, policy_model, target_model, batch_si
 	td_error = state_values - expected_state_action_values
 	curr_loss = huber_loss(td_error)
 	# Calculate gradient loss
-	gradients = tf.train.RMSPropOptimizer(learning_rate).compute_gradients(curr_loss)
+	gradients = optimizer.compute_gradients(curr_loss)
 
 	#Clip gradients
 	for index, gradient in enumerate(gradients):
