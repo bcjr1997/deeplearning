@@ -3,14 +3,29 @@ import tensorflow as tf
 import matplotlib.pyplot as plt
 import numpy as np
 
-def initiate_basic_model(x):
+def initiate_policy_model(x):
     #Linear Architecture Model
-    with tf.name_scope('linear_model') as scope:
+    with tf.name_scope('policy_model') as scope:
         hidden = tf.layers.conv2d(x, 400, 3, (1,1), "same",
                     kernel_regularizer = tf.contrib.layers.l2_regularizer(scale=0.01),
                     bias_regularizer=tf.contrib.layers.l2_regularizer(scale=0.01),
-                    activation=tf.nn.relu, name='hidden_layer')
-        output = tf.layers.dense(hidden, 18, name='output_layer',
+                    activation=tf.nn.relu, name='policy_hidden_layer')
+        output = tf.layers.dense(hidden, 18, name='policy_output_layer',
+                    kernel_regularizer = tf.contrib.layers.l2_regularizer(scale=0.01),
+                    bias_regularizer = tf.contrib.layers.l2_regularizer(scale=0.01)
+                    )
+    
+    tf.identity(output, name='output')
+    return scope, output
+
+def initiate_target_model(x):
+    #Linear Architecture Model
+    with tf.name_scope('target_model') as scope:
+        hidden = tf.layers.conv2d(x, 400, 3, (1,1), "same",
+                    kernel_regularizer = tf.contrib.layers.l2_regularizer(scale=0.01),
+                    bias_regularizer=tf.contrib.layers.l2_regularizer(scale=0.01),
+                    activation=tf.nn.relu, name='target_hidden_layer')
+        output = tf.layers.dense(hidden, 18, name='target_output_layer',
                     kernel_regularizer = tf.contrib.layers.l2_regularizer(scale=0.01),
                     bias_regularizer = tf.contrib.layers.l2_regularizer(scale=0.01)
                     )

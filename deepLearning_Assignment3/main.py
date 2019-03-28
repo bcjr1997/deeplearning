@@ -5,7 +5,7 @@ import sys
 import tensorflow as tf
 import matplotlib.pyplot as plt
 import numpy as np
-from model import initiate_basic_model, initiate_better_model
+from model import initiate_better_model, initiate_policy_model, initiate_target_model
 import atari_wrappers
 import gym  #for the RL Environment
 import util
@@ -22,6 +22,9 @@ def main(cli_args):
     parser.add_argument('--model', type=int, help=" '1' for basic model, '2' for best model")
     parser.add_argument('--stopCount', type=int, default = 100, help="Number of times for dropping accuracy before early stopping")
     args_input = parser.parse_args(cli_args)
+
+    if args_input.n_step:
+        n_step = args_input.n_step
 
     if args_input.model:
         model = args_input.model
@@ -56,17 +59,10 @@ def main(cli_args):
 
     #Setup
     LEARNING_RATE = 0.0001
-    TARGET_UPDATE_STEP_FREQ = 10
+    TARGET_UPDATE_STEP_FREQ = 5
     number_of_episodes = 20
 
-    if(str(model) == '1'):
-        policy_model = initiate_basic_model(x)
-        target_model = initiate_basic_model(x)
-    elif(str(model) == '2'):
-        policy_model = initiate_better_model(x)
-        target_model = initiate_better_model(x)
-
-    replay_memory = util.ReplayMemory(1000000)
+    replay_memory = util.ReplayMemory(10000)
     #Optimizer
     optimizer = tf.train.RMSPropOptimizer(LEARNING_RATE)
     #Load "SeaQuest" from atari_wrapper.py
@@ -76,14 +72,26 @@ def main(cli_args):
     EPS_END = 0.1
     EPS_DECAY = 100000
     step = 0
-    with tf.Session as sess:
+    with tf.Session() as sess:
+
+        if(str(model) == '1'):
+                policy_model = initiate_policy_model(x)
+                target_model = initiate_target_model(x)
+        elif(str(model) == '2'):
+            with tf.name_scope(None, "policy_scope", x) as policy:
+                policy_model = initiate_better_model(x)
+            with tf.name_scope(None, "target_scope", x) as target:
+                target_model = initiate_better_model(x)
+
         sess.run(tf.global_variables_initializer())
+
         for episode in range(number_of_episodes):
             print(f"Episode {episode}")
             prev_observation = seaquest_env.reset()
-            observation, reward, status, info = seaquest_env.step(random.randrange(NUM_ACTIONS))
+
+            observation, reward, done, _ = seaquest_env.step(random.randrange(NUM_ACTIONS))
             done = False
-            episode_score = 0
+            episode_score = 0.0
 
             while not done:
                 prep_obs = np.expand_dims(np.array(observation, dtype=np.float32), axis=0)
@@ -101,7 +109,8 @@ def main(cli_args):
                 step += 1
 
             if episode % TARGET_UPDATE_STEP_FREQ == 0:
-                target_model
+                for (target_var, policy_var) in zip(tf.trainable_variables(target), tf.trainable_variables(policy)):
+                    tf.assign(target_var, policy_var)
 
 if __name__ == "__main__":
     main(sys.argv[1:])
