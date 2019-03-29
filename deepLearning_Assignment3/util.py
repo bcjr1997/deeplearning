@@ -40,38 +40,43 @@ def huber_loss(x_placeholder, delta=1.0):
     )
 
 # Calculate the gradients for DQN
-def dqn_gradient_calculation(replay_memory, policy_model, target_model, batch_size, optimizer, n_step, gamma=0.99, grad_norm_clipping=1.0):
+def dqn_gradient_calculation(replay_memory, policy_model, target_model, batch_size, optimizer, gamma=0.99, grad_norm_clipping=1.0):
 	#Check to see if there are enough transistions to form a batch
-	if len(replay_memory) > batch_size:
-		#If meet batch size, start training batch
-		transistions = replay_memory.sample(batch_size) #Get training data with a batch size
-		batch = Transition(*zip(*transistions))
-		next_state_batch = np.array(batch.next_state, dtype=np.float32)
-		state_batch = np.array(batch.state, dtype=np.float32)
-		action_batch = np.array(batch.action, dtype=np.int64)
-		reward_batch = np.array(batch.reward)
+	if len(replay_memory) < batch_size:
+		return None, None
+	#If meet batch size, start training batch
+	transistions = replay_memory.sample(batch_size) #Get training data with a batch size
+	batch = Transition(*zip(*transistions))
+	next_state_batch = np.array(batch.next_state, dtype=np.float32)
+	state_batch = np.array(batch.state, dtype=np.float32)
+	action_batch = np.array(batch.action, dtype=np.int64)
+	reward_batch = np.array(batch.reward)
+	following_state_batch = np.array(batch.following_state, dtype=np.float32)
+	next_action_batch = np.array(batch.next_action, dtype=np.int64)
+	next_reward_batch = np.array(batch.next_reward)
 
-		#Calculate gradient of the graph
-		# Calculate values from the action state
-		action_index = np.stack([np.arange(batch_size, dtype=np.int32), action_batch], axis=1)
-		# Get the values of all states 
-		state_values = tf.gather_nd(policy_model(state_batch), action_index) #True Values
+	#Calculate gradient of the graph
+	# Calculate values from the action state
+	action_index = np.stack([np.arange(batch_size, dtype=np.int32), next_action_batch], axis=1)
+	# Get the values of all states 
+	print(f"DANK : {policy_model}/")
+	state_values = tf.gather_nd(policy_model(next_state_batch), action_index) #True Values
 		
-		# calculate best value at next state
-		next_state_values = tf.reduce_max(target_model(next_state_batch), axis=1)
-		# compute the expected Q values
-		expected_state_action_values = (next_state_values * gamma) + reward_batch
+	# calculate best value at next state
+	next_state_values = tf.reduce_max(target_model(following_state_batch), axis=1)
+	# compute the expected Q values
+	expected_state_action_values = reward_batch + (gamma * next_reward_batch) + ((gamma*gamma)* next_state_values)
 
-		#Compute Huber Loss with TD error
-		td_error = state_values - expected_state_action_values # True values - predicted values
-		curr_loss = huber_loss(td_error)
-		# Calculate gradient loss
-		gradients = optimizer.compute_gradients(curr_loss)
+	#Compute Huber Loss with TD error
+	td_error = state_values - expected_state_action_values # True values - predicted values
+	curr_loss = huber_loss(td_error)
+	# Calculate gradient loss
+	gradients = optimizer.compute_gradients(curr_loss)
 
-		#Clip gradients
-		for index, gradient in enumerate(gradients):
-			if gradient is not None:
-				gradients[index] = tf.clip_by_norm(gradient, grad_norm_clipping)
+	#Clip gradients
+	for index, gradient in enumerate(gradients):
+		if gradient is not None:
+			gradients[index] = tf.clip_by_norm(gradient, grad_norm_clipping)
 
 	return curr_loss, gradients
 

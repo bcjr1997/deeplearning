@@ -10,6 +10,7 @@ import atari_wrappers
 import gym  #for the RL Environment
 import util
 import random
+import itertools
 
 #Argsparse
 def main(cli_args):
@@ -77,6 +78,7 @@ def main(cli_args):
         if(str(model) == '1'):
                 policy_model = initiate_policy_model(x)
                 target_model = initiate_target_model(x)
+                print("Basic Model Initialized")
         elif(str(model) == '2'):
             with tf.name_scope(None, "policy_scope", x) as policy:
                 policy_model = initiate_better_model(x)
@@ -97,13 +99,15 @@ def main(cli_args):
                 prep_obs = np.expand_dims(np.array(observation, dtype=np.float32), axis=0)
                 curr_action = util.epsilon_greedy_exploration(policy_model, prep_obs, step, NUM_ACTIONS, EPS_END, EPS_DECAY)
                 observation, reward, done, _ = seaquest_env.step(curr_action)
-
-                replay_memory.push(prev_observation, curr_action, observation, reward)
+                next_obs = np.expand_dims(np.array(observation, dtype=np.float32), axis=0)
+                next_action = util.epsilon_greedy_exploration(policy_model, next_obs, step, NUM_ACTIONS, EPS_END, EPS_DECAY)
+                following_observation, next_reward, next_done , _ = seaquest_env.step(next_action)
+                replay_memory.push(prev_observation, curr_action, observation, reward, next_action, next_reward, following_observation) # s, a , r, s' a' r' s'' 
                 prev_observation = observation
 
                 loss, gradients = util.dqn_gradient_calculation(replay_memory, policy_model, target_model, batch_size, optimizer)
                 if gradients is not None:
-                    optimizer.apply_gradients(zip(gradients, tf.trainable_variables()))
+                    optimizer.apply_gradients(zip(itertools.repeat(gradients), tf.trainable_variables()))
 
                 episode_score += reward
                 step += 1
