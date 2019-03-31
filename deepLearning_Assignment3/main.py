@@ -5,7 +5,7 @@ import sys
 import tensorflow as tf
 import matplotlib.pyplot as plt
 import numpy as np
-from model import initiate_better_model, initiate_policy_model, initiate_target_model
+from model import initiate_better_policy_model, initiate_policy_model, initiate_target_model, initiate_better_target_model
 import atari_wrappers
 import gym  #for the RL Environment
 import util
@@ -23,9 +23,6 @@ def main(cli_args):
     parser.add_argument('--model', type=int, help=" '1' for basic model, '2' for best model")
     parser.add_argument('--stopCount', type=int, default = 100, help="Number of times for dropping accuracy before early stopping")
     args_input = parser.parse_args(cli_args)
-
-    if args_input.n_step:
-        n_step = args_input.n_step
 
     if args_input.model:
         model = args_input.model
@@ -45,11 +42,6 @@ def main(cli_args):
     else:
         raise ValueError("Epoch value cannot be null and has to be an integer")
 
-    if args_input.stopCount:
-        stop_counter = args_input.stopCount
-    else:
-        raise ValueError("StopCount have to be an int") 
-
     #Make output model dir
     if os.path.exists(model_dir) == False:
         os.mkdir(model_dir)
@@ -57,11 +49,11 @@ def main(cli_args):
     #Placeholder for Tensorflow Variables
     x = tf.placeholder(tf.float32, [None, 84, 84, 4], name='input_placeholder') #4 frames
     y = tf.placeholder(tf.float32, [None, 18], name='output') #18 possible outputs
-
+    action_index = tf.placeholder(tf.int32, [None, 2], name='action_index')
     #Setup
     LEARNING_RATE = 0.0001
     TARGET_UPDATE_STEP_FREQ = 5
-    number_of_episodes = 20
+    number_of_episodes = epochs
 
     replay_memory = util.ReplayMemory(10000)
     #Optimizer
@@ -73,28 +65,27 @@ def main(cli_args):
     EPS_END = 0.1
     EPS_DECAY = 100000
     step = 0
+    action_method = util.get_state_action_values(x, action_index)
+    next_state_values_method = util.get_next_state_values(y)
+    if(str(model) == '1'):
+        policy_model = initiate_policy_model(x)
+        target_model = initiate_target_model(x)
+        print("Basic Model Initialized")
+    elif(str(model) == '2'):
+        policy_model = initiate_better_policy_model(x)
+        target_model = initiate_better_target_model(x)
+        print("Better Model Initialized")
+
+    saver = tf.train.Saver()
+
     with tf.Session() as sess:
-
-        if(str(model) == '1'):
-                policy_model = initiate_policy_model(x)
-                target_model = initiate_target_model(x)
-                print("Basic Model Initialized")
-        elif(str(model) == '2'):
-            with tf.name_scope(None, "policy_scope", x) as policy:
-                policy_model = initiate_better_model(x)
-            with tf.name_scope(None, "target_scope", x) as target:
-                target_model = initiate_better_model(x)
-
         sess.run(tf.global_variables_initializer())
-
         for episode in range(number_of_episodes):
             print(f"Episode {episode}")
             prev_observation = seaquest_env.reset()
-
             observation, reward, done, _ = seaquest_env.step(random.randrange(NUM_ACTIONS))
             done = False
             episode_score = 0.0
-
             while not done:
                 prep_obs = np.expand_dims(np.array(observation, dtype=np.float32), axis=0)
                 curr_action = util.epsilon_greedy_exploration(policy_model, prep_obs, step, NUM_ACTIONS, EPS_END, EPS_DECAY)
@@ -105,7 +96,8 @@ def main(cli_args):
                 replay_memory.push(prev_observation, curr_action, observation, reward, next_action, next_reward, following_observation) # s, a , r, s' a' r' s'' 
                 prev_observation = observation
 
-                loss, gradients = util.dqn_gradient_calculation(replay_memory, policy_model, target_model, batch_size, optimizer)
+                #run the session with the placeholders
+                loss, gradients = util.dqn_gradient_calculation(replay_memory, x, y, action_index, action_method, next_state_values_method, sess, policy_model, target_model, batch_size, optimizer)
                 if gradients is not None:
                     optimizer.apply_gradients(zip(itertools.repeat(gradients), tf.trainable_variables()))
 
@@ -113,8 +105,9 @@ def main(cli_args):
                 step += 1
 
             if episode % TARGET_UPDATE_STEP_FREQ == 0:
-                for (target_var, policy_var) in zip(tf.trainable_variables(target), tf.trainable_variables(policy)):
+                for (target_var, policy_var) in zip(tf.trainable_variables(target_model), tf.trainable_variables(policy_model)):
                     tf.assign(target_var, policy_var)
+                saver.save(sess, os.path.join("./homework_1/", "homework_1"))
 
 if __name__ == "__main__":
     main(sys.argv[1:])
