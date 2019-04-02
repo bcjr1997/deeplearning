@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import math
 import atari_wrappers
+import itertools
 
 Transition = collections.namedtuple('Transition',
                         ('state', 'action', 'next_state', 'reward', 'next_action', 'next_reward', 'following_state'))
@@ -31,28 +32,14 @@ class ReplayMemory(object):
         return len(self.memory)
 
 # Huber Loss : Loss function for DQN RL
-def huber_loss(x_placeholder, delta=1.0):
-
+def huber_loss(loss, delta=1.0):
 	return tf.where(
-        tf.abs(x_placeholder) < delta,
-        tf.square(x_placeholder) * 0.5,
-        delta * (tf.abs(x_placeholder) - 0.5 * delta)
+        tf.abs(loss) < delta,
+        tf.square(loss) * 0.5,
+        delta * (tf.abs(loss) - 0.5 * delta)
     )
 
-def get_next_state_values(x):
-	return tf.reduce_max(x , axis=1)
-
-def get_state_action_values(x, action_index):
-	return tf.gather_nd(params=x, indices=action_index, name = "state_action_values")
-
-# Calculate the gradients for DQN
-def dqn_gradient_calculation(replay_memory, x , y, act_index, state_action_method, next_state_values_method, sess, policy_model, target_model, batch_size, optimizer, gamma=0.99, grad_norm_clipping=1.0):
-	#Check to see if there are enough transistions to form a batch
-	if len(replay_memory) < batch_size:
-		return None, None
-
-	#Batch Sampling	
-	#If meet batch size, start training batch
+def batch_sampling(replay_memory, batch_size):
 	transistions = replay_memory.sample(batch_size) #Get training data with a batch size
 	batch = Transition(*zip(*transistions))
 	next_state_batch = np.array(batch.next_state, dtype=np.float32)
@@ -62,36 +49,39 @@ def dqn_gradient_calculation(replay_memory, x , y, act_index, state_action_metho
 	following_state_batch = np.array(batch.following_state, dtype=np.float32)
 	next_action_batch = np.array(batch.next_action, dtype=np.int64) # Shape (32,1)
 	next_reward_batch = np.array(batch.next_reward)
+	return state_batch, action_batch, reward_batch, next_state_batch, next_action_batch, next_reward_batch, following_state_batch
+
+# Calculate the gradients for DQN
+def dqn_gradient_calculation(replay_memory, x , y, policy_output_layer, target_output_layer, sess, batch_size, optimizer, gamma=0.99, grad_norm_clipping=1.0):
+	#Check to see if there are enough transistions to form a batch
+	if len(replay_memory) < batch_size:
+		return None, None
+
+	#Batch Sampling	
+	#If meet batch size, start training batch
+	state_batch, action_batch, reward_batch, next_state_batch, next_action_batch, next_reward_batch, following_state_batch = batch_sampling(replay_memory, batch_size)
 
 	#Calculate gradient of the graph
-	# Calculate values from the action state
-	action_index = np.stack([np.arange(batch_size, dtype=np.int32), next_action_batch], axis=1)
-	#Correct Shape : (32,2) or (None, 2)
-	print(f"action indexes : {action_index.shape}")
-	# Get the values of all states 
-	state_action_values = sess.run(state_action_method, {x: next_state_batch, act_index: action_index}) #True Values
-	print(f"State action values: {state_action_values.shape}")
-	# calculate best value at next state
-	next_state_values = sess.run(next_state_values_method, {y: following_state_batch})
-	# compute the expected Q values
-	expected_state_action_values = reward_batch + (gamma * next_reward_batch) + ((gamma*gamma)* next_state_values)
-
-	#Compute Huber Loss with TD error
-	td_error = state_action_values - expected_state_action_values # True values - predicted values
-	curr_loss = sess.run(huber_loss, {y: td_error})
-	# Calculate gradient loss
-	gradients = optimizer.compute_gradients(curr_loss)
-
-	#Clip gradients
-	for index, gradient in enumerate(gradients):
-		if gradient is not None:
-			gradients[index] = tf.clip_by_norm(gradient, grad_norm_clipping)
-
+	#Calculate values from the action state
+	with sess.as_default():
+		action_index = np.stack([np.arange(batch_size, dtype=np.int32), next_action_batch], axis=1)
+		state_action_values = tf.gather_nd(policy_output_layer, action_index)
+		sess.run(state_action_values, feed_dict={x: next_state_batch})
+		next_state_values = tf.reduce_max(target_output_layer, axis = 1)
+		sess.run(next_state_values, feed_dict={x: following_state_batch})
+		expected_state_action_values = reward_batch + (gamma * next_reward_batch) + ((gamma*gamma)* next_state_values)
+		td_error = state_action_values - expected_state_action_values
+		curr_loss = huber_loss(td_error)
+		gradients, variables = zip(*optimizer.compute_gradients(curr_loss))
+		#Clip gradients
+		if gradients is not None:
+			gradients, _ = tf.clip_by_global_norm(gradients, grad_norm_clipping)
+			optimizer.apply_gradients(zip(gradients, variables))
 	return curr_loss, gradients
 
 
 # Method that exploits the system if the probability is higher than the threshold
-def epsilon_greedy_exploration(policy_model, obs, step, num_actions, EPS_END, EPS_DECAY):
+def epsilon_greedy_exploration(x, sess, action_tf, obs, step, num_actions, EPS_END, EPS_DECAY):
 	EPS_START = 1.0 # Starting Epsilon
 	"""
     Args:
@@ -101,9 +91,9 @@ def epsilon_greedy_exploration(policy_model, obs, step, num_actions, EPS_END, EP
         num_actions (int): number of actions available to the agent
     """
 	eps_threshold = EPS_END + (EPS_START - EPS_END) * math.exp(-1. * step / EPS_DECAY)
-    
 	if random.random() > eps_threshold: # exploit
-		action = tf.argmax(policy_model(tf.convert_to_tensor(obs)), axis=1)
+		action = sess.run(action_tf, {x: obs})
+		print(f"Action : {action}")
 	else: # explore
 		action = random.randrange(num_actions)
 	return action

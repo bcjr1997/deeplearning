@@ -49,7 +49,7 @@ def main(cli_args):
     #Placeholder for Tensorflow Variables
     x = tf.placeholder(tf.float32, [None, 84, 84, 4], name='input_placeholder') #4 frames
     y = tf.placeholder(tf.float32, [None, 18], name='output') #18 possible outputs
-    action_index = tf.placeholder(tf.int32, [None, 2], name='action_index')
+    
     #Setup
     LEARNING_RATE = 0.0001
     TARGET_UPDATE_STEP_FREQ = 5
@@ -60,54 +60,56 @@ def main(cli_args):
     optimizer = tf.train.RMSPropOptimizer(LEARNING_RATE)
     #Load "SeaQuest" from atari_wrapper.py
     seaquest_env = util.load_seaquest_env()
-    NUM_ACTIONS = seaquest_env.action_space.n
-    OBS_SHAPE = seaquest_env.observation_space.shape
+    NUM_ACTIONS = seaquest_env.action_space.n #18 Possible Actions
+    OBS_SHAPE = seaquest_env.observation_space.shape # [height, width, channels] = [84, 84, 4]
     EPS_END = 0.1
     EPS_DECAY = 100000
     step = 0
-    action_method = util.get_state_action_values(x, action_index)
-    next_state_values_method = util.get_next_state_values(y)
+
     if(str(model) == '1'):
-        policy_model = initiate_policy_model(x)
-        target_model = initiate_target_model(x)
+        policy_model, policy_output_layer = initiate_policy_model(x, NUM_ACTIONS)
+        target_model, target_output_layer = initiate_target_model(x, NUM_ACTIONS)
         print("Basic Model Initialized")
     elif(str(model) == '2'):
-        policy_model = initiate_better_policy_model(x)
-        target_model = initiate_better_target_model(x)
+        policy_model, policy_output_layer = initiate_better_policy_model(x, NUM_ACTIONS)
+        target_model, target_output_layer = initiate_better_target_model(x, NUM_ACTIONS)
         print("Better Model Initialized")
-
+    prev_episode_score = -1
     saver = tf.train.Saver()
-
+    argmax_action = tf.argmax(policy_output_layer, axis = 1)
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
         for episode in range(number_of_episodes):
-            print(f"Episode {episode}")
             prev_observation = seaquest_env.reset()
             observation, reward, done, _ = seaquest_env.step(random.randrange(NUM_ACTIONS))
             done = False
             episode_score = 0.0
             while not done:
                 prep_obs = np.expand_dims(np.array(observation, dtype=np.float32), axis=0)
-                curr_action = util.epsilon_greedy_exploration(policy_model, prep_obs, step, NUM_ACTIONS, EPS_END, EPS_DECAY)
+                curr_action = util.epsilon_greedy_exploration(x, sess, argmax_action, prep_obs, step, NUM_ACTIONS, EPS_END, EPS_DECAY)
                 observation, reward, done, _ = seaquest_env.step(curr_action)
                 next_obs = np.expand_dims(np.array(observation, dtype=np.float32), axis=0)
-                next_action = util.epsilon_greedy_exploration(policy_model, next_obs, step, NUM_ACTIONS, EPS_END, EPS_DECAY)
+                next_action = util.epsilon_greedy_exploration(x, sess, argmax_action, next_obs, step, NUM_ACTIONS, EPS_END, EPS_DECAY)
                 following_observation, next_reward, next_done , _ = seaquest_env.step(next_action)
                 replay_memory.push(prev_observation, curr_action, observation, reward, next_action, next_reward, following_observation) # s, a , r, s' a' r' s'' 
                 prev_observation = observation
 
                 #run the session with the placeholders
-                loss, gradients = util.dqn_gradient_calculation(replay_memory, x, y, action_index, action_method, next_state_values_method, sess, policy_model, target_model, batch_size, optimizer)
-                if gradients is not None:
-                    optimizer.apply_gradients(zip(itertools.repeat(gradients), tf.trainable_variables()))
-
-                episode_score += reward
+                loss, gradients= util.dqn_gradient_calculation(replay_memory, x, y, policy_output_layer, target_output_layer, sess, batch_size, optimizer)
+                episode_score += next_reward
                 step += 1
-
+            print(f"Episode : {episode} Episode Score : {episode_score} Step: {step}")
             if episode % TARGET_UPDATE_STEP_FREQ == 0:
                 for (target_var, policy_var) in zip(tf.trainable_variables(target_model), tf.trainable_variables(policy_model)):
                     tf.assign(target_var, policy_var)
-                saver.save(sess, os.path.join("./homework_1/", "homework_1"))
+                if episode_score >= prev_episode_score:
+                    print("Saving .........")
+                    saver.save(sess, os.path.join("./homework_3/", "homework_3"))
+                    prev_episode_score = episode_score
+            if episode_score >= prev_episode_score:
+                print("Saving .........")
+                saver.save(sess, os.path.join("./homework_3/", "homework_3"))
+                prev_episode_score = episode_score
 
 if __name__ == "__main__":
     main(sys.argv[1:])
